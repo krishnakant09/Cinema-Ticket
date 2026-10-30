@@ -67,7 +67,7 @@ export const MOVIES = [
   },
   {
     id: 'oppenheimer',
-    title: 'Oppenheimer',
+    title: 'Oppenheimer', 
     tagline: 'The world forever changes.',
     genre: ['Biography', 'Drama', 'History'],
     rating: 'R',
