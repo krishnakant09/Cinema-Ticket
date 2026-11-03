@@ -16,9 +16,8 @@ export const MOVIES = [
       'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=800&auto=format&fit=crop',
     backdrop:
       'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1800&auto=format&fit=crop',
-    screenVideoTeaser: 'Desert planet spice storm & sandworm awakening',
+    trailerSrc: '/trailers/dune2.mp4',
     formats: ['IMAX with Laser 3D', 'Dolby Cinema', '4DX'],
-    trailerUrl: 'https://www.youtube.com/embed/Way9Dexny3w',
     accentColor: '#f59e0b',
   },
   {
@@ -38,36 +37,34 @@ export const MOVIES = [
       'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800&auto=format&fit=crop',
     backdrop:
       'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=1800&auto=format&fit=crop',
-    screenVideoTeaser: 'Gargantua black hole gravitational lensing',
+    trailerSrc: '/trailers/interstellar.mp4',
     formats: ['IMAX 70mm', 'Dolby Cinema Atmos'],
-    trailerUrl: 'https://www.youtube.com/embed/zSWdZVtXT7E',
     accentColor: '#38bdf8',
   },
   {
-    id: 'cyberpunk-2099',
-    title: 'Cyberpunk: Neo Tokyo',
-    tagline: 'The future has no mercy for legends.',
-    genre: ['Cyberpunk', 'Action', 'Thriller'],
-    rating: 'R',
-    imdb: '8.5',
-    duration: '2h 18m',
-    releaseYear: 2025,
-    director: 'Shinichiro Watanabe',
-    stars: ['Hiroyuki Sanada', 'Karen Fukuhara', 'Keanu Reeves'],
+    id: 'avatar-2',
+    title: 'Avatar: The Way of Water',
+    tagline: 'Return to Pandora.',
+    genre: ['Sci-Fi', 'Adventure', 'Fantasy'],
+    rating: 'PG-13',
+    imdb: '7.6',
+    duration: '3h 12m',
+    releaseYear: 2023,
+    director: 'James Cameron',
+    stars: ['Sam Worthington', 'Zoe Saldana', 'Sigourney Weaver', 'Kate Winslet'],
     synopsis:
-      'In the hyper-dense neon megalopolis of Neo-Tokyo 2099, a rogue neural operative uncovers a synthetic consciousness capable of hijacking human motor memory across the planetary grid.',
+      'Set more than a decade after the events of the first film, Jake Sully and Neytiri have formed a family. However, an ancient threat returns, forcing them to leave their home and explore the oceanic regions of Pandora.',
     poster:
-      'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=800&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop',
     backdrop:
-      'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1800&auto=format&fit=crop',
-    screenVideoTeaser: 'Holographic rain over neon skyscraper canyons',
-    formats: ['Dolby Cinema Atmos', 'IMAX with Laser'],
-    trailerUrl: '',
-    accentColor: '#ec4899',
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1800&auto=format&fit=crop',
+    trailerSrc: '/trailers/avatar.mp4',
+    formats: ['IMAX 3D Laser High Frame Rate', 'Dolby Cinema 3D'],
+    accentColor: '#06b6d4',
   },
   {
     id: 'oppenheimer',
-    title: 'Oppenheimer', 
+    title: 'Oppenheimer',
     tagline: 'The world forever changes.',
     genre: ['Biography', 'Drama', 'History'],
     rating: 'R',
@@ -82,9 +79,8 @@ export const MOVIES = [
       'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?q=80&w=800&auto=format&fit=crop',
     backdrop:
       'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?q=80&w=1800&auto=format&fit=crop',
-    screenVideoTeaser: 'Trinity test atmospheric firestorm ignition',
+    trailerSrc: '/trailers/oppenheimer.mp4',
     formats: ['IMAX 70mm', 'Standard 4K'],
-    trailerUrl: '',
     accentColor: '#f97316',
   }
 ];
@@ -168,7 +164,7 @@ export function generateCinemaSeats(showtimeId = 't2', movieId = 'dune-2') {
   const rowSpacingZ = 1.25;
   const riserElevationY = 0.42; // slope height per row
 
-  // Simple deterministic seed for booked seats per movie + showtime
+  // Deterministic seed for booked seats per movie + showtime
   const seedString = `${movieId}-${showtimeId}`;
   let seed = 0;
   for (let i = 0; i < seedString.length; i++) {
@@ -185,7 +181,6 @@ export function generateCinemaSeats(showtimeId = 't2', movieId = 'dune-2') {
     const tier = TIER_CONFIG[tierKey];
 
     for (let seatNum = 1; seatNum <= seatsPerRow; seatNum++) {
-      // Create aisle in the center: 1-8 on left, 9-16 on right
       let posX = (seatNum - 8.5) * seatSpacingX;
       if (seatNum <= 8) {
         posX -= aisleWidth / 2;
@@ -193,19 +188,15 @@ export function generateCinemaSeats(showtimeId = 't2', movieId = 'dune-2') {
         posX += aisleWidth / 2;
       }
 
-      // Front row (A) is closest to screen (Z = 4), back row (J) is further (Z = 4 + 9 * 1.25 = 15.25)
       const posZ = 3.5 + rowIndex * rowSpacingZ;
-      // Riser steps up with each row for perfect sightlines
       const posY = rowIndex * riserElevationY;
 
       // Wheelchair designated spots in row D, seats 1 and 16
       const isWheelchair = rowChar === 'D' && (seatNum === 1 || seatNum === 16);
 
-      // Deterministic booked calculation
       const pseudorand = Math.sin(seed + rowIndex * 17 + seatNum * 31) * 10000;
       const randVal = pseudorand - Math.floor(pseudorand);
 
-      // Middle sweet spots have higher occupancy to look realistic
       let bookedThreshold = 0.35;
       if (['E', 'F', 'G'].includes(rowChar) && seatNum >= 6 && seatNum <= 11) {
         bookedThreshold = 0.65;
@@ -223,8 +214,7 @@ export function generateCinemaSeats(showtimeId = 't2', movieId = 'dune-2') {
         tierName: tier.name,
         price: tier.basePrice,
         isWheelchair,
-        status: isBooked ? 'booked' : 'available', // 'available' | 'booked' | 'selected'
-        // 3D coordinates
+        status: isBooked ? 'booked' : 'available',
         x: posX,
         y: posY,
         z: posZ
@@ -303,4 +293,3 @@ export const PROMO_CODES = {
   IMAXVIP: { discountPercent: 15, description: '15% Off VIP Experience' },
   FIRST5: { discountAmount: 5, description: '$5 Off Ticket Order' }
 };
-

@@ -1,9 +1,20 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { ScreenCanvasTexture } from './ScreenCanvasTexture.js';
 import { soundFX } from '../../utils/soundFX.js';
-import { Eye, Check, Sparkles, Navigation, Layers, RotateCcw } from 'lucide-react';
+import {
+  Eye,
+  Check,
+  Sparkles,
+  Navigation,
+  Layers,
+  RotateCcw,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Film,
+} from 'lucide-react';
 
 // Camera preset positions
 const PRESETS = {
@@ -52,7 +63,7 @@ function buildAuditorium(scene) {
     stepMesh.receiveShadow = true;
     floorGroup.add(stepMesh);
 
-    // Aisle glowing runner strip on step edge
+    // Aisle runner
     const runnerGeo = new THREE.PlaneGeometry(1.6, stepDepth);
     const runnerMat = new THREE.MeshStandardMaterial({
       color: '#1e2638',
@@ -155,8 +166,8 @@ function buildAuditorium(scene) {
   scene.add(exitRight);
 }
 
-// Builder function: Curved cinema screen
-function buildCurvedScreen(scene, screenTexture) {
+// Builder function: Curved cinema screen with video material
+function buildCurvedScreen(scene, videoTexture) {
   const radius = 22;
   const height = 8.8;
   const arcAngle = 0.72; // ~41 degrees curved wrap
@@ -178,7 +189,7 @@ function buildCurvedScreen(scene, screenTexture) {
   screenGeo.scale(1, 1, -1);
 
   const screenMat = new THREE.MeshBasicMaterial({
-    map: screenTexture,
+    map: videoTexture,
     side: THREE.FrontSide,
   });
 
@@ -207,6 +218,8 @@ function buildCurvedScreen(scene, screenTexture) {
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
   frameMesh.position.copy(screenMesh.position);
   scene.add(frameMesh);
+
+  return screenMesh;
 }
 
 // Builder function: Cinema seats
@@ -292,7 +305,6 @@ function buildSeats(scene, seatList, selectedIds, seatMap, beaconsMap) {
       emissiveIntensity: emissiveInt,
     });
 
-    // Cushion
     const cushionMesh = new THREE.Mesh(
       isVip ? cushionGeoVip : cushionGeoStandard,
       cushionMat
@@ -303,7 +315,6 @@ function buildSeats(scene, seatList, selectedIds, seatMap, beaconsMap) {
     cushionMesh.userData = { seatId: seat.id };
     seatGroup.add(cushionMesh);
 
-    // Backrest
     const backrestMesh = new THREE.Mesh(
       isVip ? backrestGeoVip : backrestGeoStandard,
       backrestMat
@@ -315,7 +326,6 @@ function buildSeats(scene, seatList, selectedIds, seatMap, beaconsMap) {
     backrestMesh.userData = { seatId: seat.id };
     seatGroup.add(backrestMesh);
 
-    // Base support legs
     const leftLeg = new THREE.Mesh(baseLegGeo, baseLegMat);
     leftLeg.position.set(-0.25, 0.16, 0.05);
     seatGroup.add(leftLeg);
@@ -324,7 +334,6 @@ function buildSeats(scene, seatList, selectedIds, seatMap, beaconsMap) {
     rightLeg.position.set(0.25, 0.16, 0.05);
     seatGroup.add(rightLeg);
 
-    // Armrests
     const armrestOffset = isVip ? 0.44 : 0.36;
 
     const leftArm = new THREE.Mesh(armrestGeo, armrestMat);
@@ -335,12 +344,10 @@ function buildSeats(scene, seatList, selectedIds, seatMap, beaconsMap) {
     rightArm.position.set(armrestOffset, 0.44, 0.04);
     seatGroup.add(rightArm);
 
-    // Cup Holder Ring
     const cupHolder = new THREE.Mesh(cupHolderGeo, cupHolderRingMat);
     cupHolder.position.set(armrestOffset, 0.61, 0.22);
     seatGroup.add(cupHolder);
 
-    // Beacon Light Cone
     const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat.clone());
     beaconMesh.position.set(0, 1.4, 0);
     beaconMesh.visible = isSelected;
@@ -369,6 +376,14 @@ export default function TheaterCanvas({
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const videoRef = useRef(null);
+
+  // Video trailer playback state
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
 
   // Hover state
   const [hoveredSeat, setHoveredSeat] = useState(null);
@@ -382,8 +397,8 @@ export default function TheaterCanvas({
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
-  const screenTextureRef = useRef(null);
-  const screenMeshTextureRef = useRef(null);
+  const screenMeshRef = useRef(null);
+  const videoTextureRef = useRef(null);
   const screenLightRef = useRef(null);
   const seatMeshesRef = useRef(new Map());
   const seatBeaconsRef = useRef(new Map());
@@ -401,10 +416,9 @@ export default function TheaterCanvas({
     startLookAt: new THREE.Vector3(),
     targetLookAt: new THREE.Vector3(),
     progress: 0,
-    duration: 1.2, // seconds
+    duration: 1.2,
   });
 
-  // Track latest props in refs for animation loop
   const seatsRef = useRef(seats);
   const selectedSeatIdsRef = useRef(selectedSeatIds);
   const povSeatIdRef = useRef(povSeatId);
@@ -455,15 +469,61 @@ export default function TheaterCanvas({
     }
   }, [povSeatId, seats, animateCameraTo]);
 
-  // Sync Movie change on screen texture
+  // Handle Video Element & Source Updates when Movie Changes
   useEffect(() => {
-    if (screenTextureRef.current && currentMovie) {
-      screenTextureRef.current.setMovie(currentMovie);
-      if (screenLightRef.current && currentMovie.accentColor) {
-        screenLightRef.current.color.set(currentMovie.accentColor);
-      }
+    const video = videoRef.current;
+    if (!video || !currentMovie?.trailerSrc) return;
+
+    video.src = currentMovie.trailerSrc;
+    video.muted = isMuted;
+    video.currentTime = 0;
+
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch(() => {
+          // If browser policy blocks autoplay with audio, fall back to muted
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch(() => {});
+        });
     }
-  }, [currentMovie]);
+
+    if (screenLightRef.current && currentMovie.accentColor) {
+      screenLightRef.current.color.set(currentMovie.accentColor);
+    }
+  }, [currentMovie, isMuted]);
+
+  // Toggle Video Play / Pause
+  const handleTogglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.paused) {
+      video.play().then(() => setIsPlaying(true));
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  // Toggle Video Sound
+  const handleToggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    setIsMuted(nextMuted);
+
+    // If unmuting, make sure video is playing
+    if (!nextMuted && video.paused) {
+      video.play().then(() => setIsPlaying(true));
+    }
+  };
 
   // Update materials when selectedSeatIds changes
   useEffect(() => {
@@ -525,7 +585,7 @@ export default function TheaterCanvas({
     });
   }, [selectedSeatIds, seats]);
 
-  // Main Three.js Scene Setup
+  // Main Three.js Scene Setup with Video Texture
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -570,14 +630,14 @@ export default function TheaterCanvas({
     controlsRef.current = controls;
 
     // 5. Lighting
-    const ambientLight = new THREE.AmbientLight('#ffffff', 0.45);
+    const ambientLight = new THREE.AmbientLight('#ffffff', 0.42);
     scene.add(ambientLight);
 
     const movieColor = currentMovieRef.current?.accentColor || '#f59e0b';
-    const screenLight = new THREE.SpotLight(movieColor, 3.8);
-    screenLight.position.set(0, 4.0, 0);
+    const screenLight = new THREE.SpotLight(movieColor, 4.2);
+    screenLight.position.set(0, 4.2, 0);
     screenLight.target.position.set(0, 1.5, 9.5);
-    screenLight.angle = Math.PI / 2.6;
+    screenLight.angle = Math.PI / 2.5;
     screenLight.penumbra = 0.8;
     screenLight.decay = 1.2;
     screenLight.distance = 28;
@@ -589,11 +649,11 @@ export default function TheaterCanvas({
     scene.add(screenLight.target);
     screenLightRef.current = screenLight;
 
-    const ceilingLight1 = new THREE.PointLight('#38bdf8', 0.8, 25);
+    const ceilingLight1 = new THREE.PointLight('#38bdf8', 0.7, 25);
     ceilingLight1.position.set(-8, 9, 8);
     scene.add(ceilingLight1);
 
-    const ceilingLight2 = new THREE.PointLight('#f59e0b', 0.8, 25);
+    const ceilingLight2 = new THREE.PointLight('#f59e0b', 0.7, 25);
     ceilingLight2.position.set(8, 9, 8);
     scene.add(ceilingLight2);
 
@@ -610,16 +670,27 @@ export default function TheaterCanvas({
     // 6. Auditorium Architecture
     buildAuditorium(scene);
 
-    // 7. Curved IMAX Cinema Screen with Live Canvas Texture
-    const screenTextureGen = new ScreenCanvasTexture(1024, 512);
-    if (currentMovieRef.current) screenTextureGen.setMovie(currentMovieRef.current);
-    screenTextureRef.current = screenTextureGen;
+    // 7. Video Texture Creation
+    const video = videoRef.current;
+    let videoTexture;
+    if (video) {
+      videoTexture = new THREE.VideoTexture(video);
+      videoTexture.colorSpace = THREE.SRGBColorSpace;
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+      videoTexture.format = THREE.RGBAFormat;
+      videoTexture.generateMipmaps = false;
 
-    const screenMeshTexture = new THREE.CanvasTexture(screenTextureGen.canvas);
-    screenMeshTexture.colorSpace = THREE.SRGBColorSpace;
-    screenMeshTextureRef.current = screenMeshTexture;
+      // Adjust UV orientation for curved cylinder segment so text isn't mirrored
+      videoTexture.wrapS = THREE.RepeatWrapping;
+      videoTexture.repeat.x = -1;
+      videoTexture.offset.x = 1;
 
-    buildCurvedScreen(scene, screenMeshTexture);
+      videoTextureRef.current = videoTexture;
+    }
+
+    const screenMesh = buildCurvedScreen(scene, videoTexture);
+    screenMeshRef.current = screenMesh;
 
     // 8. Build Seats
     buildSeats(
@@ -630,7 +701,7 @@ export default function TheaterCanvas({
       seatBeaconsRef.current
     );
 
-    // Window Resize Handler
+    // Resize Handler
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = containerRef.current.clientWidth;
@@ -651,15 +722,7 @@ export default function TheaterCanvas({
       const delta = clock.getDelta();
       const elapsedTime = clock.getElapsedTime();
 
-      // Update Screen Canvas Texture
-      if (screenTextureRef.current && screenMeshTextureRef.current) {
-        const updated = screenTextureRef.current.update(delta);
-        if (updated) {
-          screenMeshTextureRef.current.needsUpdate = true;
-        }
-      }
-
-      // Handle Camera Lerp Animation
+      // Camera Lerp Animation
       const anim = cameraAnimRef.current;
       if (anim.animating) {
         anim.progress += delta / anim.duration;
@@ -672,6 +735,12 @@ export default function TheaterCanvas({
         if (t >= 1.0) {
           anim.animating = false;
         }
+      }
+
+      // Dynamic screen light modulation as movie video plays
+      if (video && !video.paused && screenLightRef.current) {
+        const pulse = Math.sin(elapsedTime * 3) * 0.4 + 4.0;
+        screenLightRef.current.intensity = pulse;
       }
 
       // Animate beacons on selected seats
@@ -689,14 +758,40 @@ export default function TheaterCanvas({
 
     render();
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
+      if (videoTexture) videoTexture.dispose();
       renderer.dispose();
       scene.clear();
     };
   }, []);
+
+  // Helper to format video seconds into M:SS
+  const formatTime = (seconds) => {
+    if (isNaN(seconds) || seconds <= 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Track video progress
+  const handleTimeUpdate = () => {
+    const video = videoRef.current;
+    if (video && video.duration) {
+      setCurrentTime(video.currentTime);
+      setVideoProgress((video.currentTime / video.duration) * 100);
+      setVideoDuration(video.duration);
+    }
+  };
+
+  const handleSeek = (e) => {
+    const video = videoRef.current;
+    if (!video || !video.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    video.currentTime = pos * video.duration;
+  };
 
   // Raycasting helper
   const getIntersectedSeat = (event) => {
@@ -788,8 +883,20 @@ export default function TheaterCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[620px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#090b12] to-[#04060a] border border-white/10 select-none shadow-2xl"
+      className="relative w-full h-[640px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#090b12] to-[#04060a] border border-white/10 select-none shadow-2xl"
     >
+      {/* Hidden HTML5 Video element used by Three.js VideoTexture */}
+      <video
+        ref={videoRef}
+        src={currentMovie?.trailerSrc || '/trailers/dune2.mp4'}
+        crossOrigin="anonymous"
+        loop
+        playsInline
+        muted={isMuted}
+        onTimeUpdate={handleTimeUpdate}
+        className="hidden"
+      />
+
       {/* 3D WebGL Canvas */}
       <canvas
         ref={canvasRef}
@@ -801,11 +908,11 @@ export default function TheaterCanvas({
 
       {/* Screen Arc Overhead Header Indicator */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center">
-        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-cyan-500/30 text-cyan-300 text-xs font-semibold tracking-wider uppercase shadow-lg shadow-cyan-500/10">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          IMAX Laser 4K Curved Screen
+        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-cyan-500/30 text-cyan-300 text-xs font-semibold tracking-wider uppercase shadow-lg shadow-cyan-500/10">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span>IMAX® Laser 4K • Now Playing Trailer</span>
         </div>
-        <div className="w-48 h-2 mt-1 border-t-2 border-cyan-400/40 rounded-t-[100%] shadow-[0_0_12px_rgba(6,182,212,0.5)]" />
+        <div className="w-56 h-2 mt-1 border-t-2 border-cyan-400/50 rounded-t-[100%] shadow-[0_0_15px_rgba(6,182,212,0.6)]" />
       </div>
 
       {/* Camera View Presets Bar (Top Right) */}
@@ -874,6 +981,71 @@ export default function TheaterCanvas({
         </button>
       </div>
 
+      {/* Dedicated In-Theater Trailer Player Bar (Above Bottom Controls) */}
+      <div className="absolute top-16 left-4 z-10 flex items-center gap-2 p-1.5 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/15 shadow-2xl">
+        <div className="flex items-center gap-2 px-2 py-1 text-xs text-white">
+          <Film className="w-4 h-4 text-amber-400" />
+          <span className="font-bold truncate max-w-[140px] sm:max-w-[180px]">
+            {currentMovie?.title}
+          </span>
+        </div>
+
+        <div className="h-4 w-px bg-white/20" />
+
+        {/* Play/Pause Button */}
+        <button
+          onClick={handleTogglePlay}
+          className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+          title={isPlaying ? 'Pause 3D Screen Trailer' : 'Play 3D Screen Trailer'}
+        >
+          {isPlaying ? (
+            <Pause className="w-3.5 h-3.5 fill-white" />
+          ) : (
+            <Play className="w-3.5 h-3.5 fill-white" />
+          )}
+        </button>
+
+        {/* Audio Mute/Unmute Button */}
+        <button
+          onClick={handleToggleMute}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            isMuted
+              ? 'bg-white/10 text-gray-300 hover:bg-white/20'
+              : 'bg-cyan-500/30 border border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/20 animate-pulse'
+          }`}
+          title={isMuted ? 'Unmute Trailer Audio' : 'Mute Trailer Audio'}
+        >
+          {isMuted ? (
+            <>
+              <VolumeX className="w-3.5 h-3.5 text-gray-400" />
+              <span className="hidden sm:inline">Unmute Sound</span>
+            </>
+          ) : (
+            <>
+              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Sound Playing</span>
+            </>
+          )}
+        </button>
+
+        {/* Video Scrubber bar */}
+        <div
+          onClick={handleSeek}
+          className="w-16 sm:w-24 h-2 bg-white/20 rounded-full overflow-hidden cursor-pointer relative"
+          title="Click to seek trailer"
+        >
+          <div
+            className="h-full bg-gradient-to-r from-amber-400 to-cyan-400 transition-all duration-100"
+            style={{ width: `${videoProgress}%` }}
+          />
+        </div>
+
+        {/* Video Timestamp */}
+        <span className="font-mono text-[10px] text-gray-400 hidden md:inline px-1">
+          {formatTime(currentTime)} / {formatTime(videoDuration)}
+        </span>
+      </div>
+
       {/* POV Mode Banner Overlay */}
       {povSeatId && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-6 py-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-cyan-500/50 shadow-2xl shadow-cyan-500/20 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -889,7 +1061,7 @@ export default function TheaterCanvas({
                 </span>
               </div>
               <p className="text-xs text-gray-400">
-                True eye-level perspective of the curved IMAX screen
+                Watching {currentMovie?.title} trailer from your chosen seat
               </p>
             </div>
           </div>

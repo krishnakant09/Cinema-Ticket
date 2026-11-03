@@ -6,8 +6,14 @@ An immersive, full-stack WebGL cinema ticket booking platform built with **React
 
 ## 🌟 Key Highlights & Features
 
-### 1. 🎥 Real-Time Interactive 3D Auditorium
-- **Giant Curved IMAX Screen**: Features an animated dynamic teaser canvas texture that projects color-matched atmospheric lighting across the theater.
+### 1. 🎥 Real-Time Interactive 3D Auditorium & On-Screen Movie Trailers
+- **Live Theatrical Video Playback**: Real movie trailers play directly on the curved IMAX screen with `THREE.VideoTexture` and HTML5 video streaming.
+- **Dedicated In-Auditorium Player HUD**:
+  - Play / Pause control.
+  - Sound Unmute / Mute toggle with trailer soundtrack playback.
+  - Real-time scrubber timeline with seek and timestamp indicator (`0:42 / 2:15`).
+  - Screen dynamic lighting modulation: as the trailer footage changes, the screen casts real-time colored illumination onto the seats, floor, and auditorium risers!
+- **Giant Curved IMAX Screen**: Acoustically calibrated curved geometry facing the audience.
 - **Tiered Stadium Risers**: Acoustically calibrated tiered elevation across 10 rows (Rows A to J) with carpeted aisles and recessed LED runner lights.
 - **Detailed 3D Seat Modeling**:
   - Individually modeled armrests, cushions, backrests, and cup holders.
