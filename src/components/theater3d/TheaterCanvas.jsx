@@ -19,20 +19,20 @@ import {
 // Camera preset positions
 const PRESETS = {
   sweetspot: {
-    position: new THREE.Vector3(0, 10.5, 23.5),
-    target: new THREE.Vector3(0, 2.5, 4.5),
+    position: new THREE.Vector3(0, 9.5, 21.5),
+    target: new THREE.Vector3(0, 4.5, 3.0),
   },
   vip: {
-    position: new THREE.Vector3(0, 7.8, 17.5),
-    target: new THREE.Vector3(0, 2.2, 0),
+    position: new THREE.Vector3(0, 7.5, 16.5),
+    target: new THREE.Vector3(0, 4.8, -1.0),
   },
   topdown: {
-    position: new THREE.Vector3(0, 26, 9.5),
-    target: new THREE.Vector3(0, 0, 9.5),
+    position: new THREE.Vector3(0, 25.0, 8.5),
+    target: new THREE.Vector3(0, 0, 8.5),
   },
   screen: {
-    position: new THREE.Vector3(0, 3.2, -0.5),
-    target: new THREE.Vector3(0, 2.5, 12),
+    position: new THREE.Vector3(0, 4.8, 0.5),
+    target: new THREE.Vector3(0, 3.0, 10.0),
   },
 };
 
@@ -85,26 +85,26 @@ function buildAuditorium(scene) {
     floorGroup.add(led);
   }
 
-  // Front Stage Area near screen
-  const frontStageGeo = new THREE.BoxGeometry(floorWidth, 0.3, 5.0);
+  // Front Stage Area under screen
+  const frontStageGeo = new THREE.BoxGeometry(floorWidth, 0.4, 4.5);
   const frontStageMat = new THREE.MeshStandardMaterial({
-    color: '#0f121a',
+    color: '#0e1118',
     roughness: 0.9,
   });
   const frontStage = new THREE.Mesh(frontStageGeo, frontStageMat);
-  frontStage.position.set(0, 0.15, 0.5);
+  frontStage.position.set(0, 0.2, 0.5);
   frontStage.receiveShadow = true;
   floorGroup.add(frontStage);
 
   scene.add(floorGroup);
 
-  // Side Acoustic Walls
+  // Side & Rear & Front Walls
   const wallHeight = 11;
   const wallLength = 26;
   const wallThickness = 0.6;
 
   const wallMat = new THREE.MeshStandardMaterial({
-    color: '#0b0d14',
+    color: '#090b10',
     roughness: 0.95,
     metalness: 0.05,
   });
@@ -125,7 +125,7 @@ function buildAuditorium(scene) {
   rightWall.position.set(floorWidth / 2 + 0.3, wallHeight / 2, 8.5);
   scene.add(rightWall);
 
-  // Rear Wall
+  // Rear Wall (Back of auditorium)
   const backWall = new THREE.Mesh(
     new THREE.BoxGeometry(floorWidth + 1.2, wallHeight, wallThickness),
     wallMat
@@ -133,7 +133,15 @@ function buildAuditorium(scene) {
   backWall.position.set(0, wallHeight / 2, 8.5 + wallLength / 2);
   scene.add(backWall);
 
-  // Wall Sconces
+  // Front Wall (Behind curved screen)
+  const frontWall = new THREE.Mesh(
+    new THREE.BoxGeometry(floorWidth + 1.2, wallHeight, wallThickness),
+    wallMat
+  );
+  frontWall.position.set(0, wallHeight / 2, -2.5);
+  scene.add(frontWall);
+
+  // Wall Sconces along left & right walls
   const sconceMat = new THREE.MeshBasicMaterial({ color: '#f59e0b' });
   const sconceGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.8, 8);
 
@@ -166,27 +174,32 @@ function buildAuditorium(scene) {
   scene.add(exitRight);
 }
 
+// Helper to generate a curved concave screen geometry facing positive Z (towards audience)
+function createCurvedScreenGeometry(width = 18.5, height = 8.6, curveDepth = 1.6, segments = 48) {
+  const geo = new THREE.PlaneGeometry(width, height, segments, 1);
+  const pos = geo.attributes.position;
+  const halfWidth = width / 2;
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const normX = x / halfWidth;
+    // Parabolic concave curve: center is recessed backwards by -curveDepth
+    const z = (1 - normX * normX) * -curveDepth;
+    pos.setZ(i, z);
+  }
+
+  geo.computeVertexNormals();
+  return geo;
+}
+
 // Builder function: Curved cinema screen with video material
 function buildCurvedScreen(scene, videoTexture) {
-  const radius = 22;
-  const height = 8.8;
-  const arcAngle = 0.72; // ~41 degrees curved wrap
-  const radialSegments = 32;
+  const width = 18.5;
+  const height = 8.6;
+  const curveDepth = 1.6;
 
-  const thetaStart = -Math.PI / 2 - arcAngle / 2;
-  const screenGeo = new THREE.CylinderGeometry(
-    radius,
-    radius,
-    height,
-    radialSegments,
-    1,
-    true,
-    thetaStart,
-    arcAngle
-  );
-
-  // Invert geometry so inside curve faces center
-  screenGeo.scale(1, 1, -1);
+  // 1. Curved Screen Mesh (Concave facing audience at +Z)
+  const screenGeo = createCurvedScreenGeometry(width, height, curveDepth, 48);
 
   const screenMat = new THREE.MeshBasicMaterial({
     map: videoTexture,
@@ -194,30 +207,33 @@ function buildCurvedScreen(scene, videoTexture) {
   });
 
   const screenMesh = new THREE.Mesh(screenGeo, screenMat);
-  screenMesh.position.set(0, 4.4, -radius + 2.0);
+  // Center of screen sits majestically at front of hall
+  screenMesh.position.set(0, 5.2, -0.6);
   scene.add(screenMesh);
 
-  // Screen Bezel Border
-  const frameGeo = new THREE.CylinderGeometry(
-    radius - 0.05,
-    radius - 0.05,
-    height + 0.3,
-    radialSegments,
-    1,
-    true,
-    thetaStart - 0.01,
-    arcAngle + 0.02
-  );
-  frameGeo.scale(1, 1, -1);
+  // 2. Matching Curved Cinema Bezel Frame
+  const frameGeo = createCurvedScreenGeometry(width + 0.5, height + 0.5, curveDepth, 48);
   const frameMat = new THREE.MeshStandardMaterial({
-    color: '#030407',
+    color: '#040508',
     roughness: 0.95,
     metalness: 0.2,
     side: THREE.BackSide,
   });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-  frameMesh.position.copy(screenMesh.position);
+  frameMesh.position.set(0, 5.2, -0.63);
   scene.add(frameMesh);
+
+  // 3. Subtle ambient border glow behind frame
+  const glowGeo = createCurvedScreenGeometry(width + 0.8, height + 0.8, curveDepth, 32);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: '#06b6d4',
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.BackSide,
+  });
+  const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+  glowMesh.position.set(0, 5.2, -0.66);
+  scene.add(glowMesh);
 
   return screenMesh;
 }
@@ -456,14 +472,14 @@ export default function TheaterCanvas({
     }
   }, [animateCameraTo, onExitPov]);
 
-  // Sync POV mode transitions
+  // Sync POV mode transitions: Eye level looking directly at center of curved screen
   useEffect(() => {
     if (povSeatId) {
       const seat = seats.find((s) => s.id === povSeatId);
       if (seat) {
         soundFX.playWhoosh();
-        const povPos = new THREE.Vector3(seat.x, seat.y + 0.92, seat.z + 0.05);
-        const screenTarget = new THREE.Vector3(0, 3.4, -0.8);
+        const povPos = new THREE.Vector3(seat.x, seat.y + 0.95, seat.z + 0.05);
+        const screenTarget = new THREE.Vector3(0, 5.2, -0.6);
         animateCameraTo(povPos, screenTarget, 1.2);
       }
     }
@@ -477,6 +493,7 @@ export default function TheaterCanvas({
     video.src = currentMovie.trailerSrc;
     video.muted = isMuted;
     video.currentTime = 0;
+    video.load();
 
     const playPromise = video.play();
     if (playPromise !== undefined) {
@@ -485,7 +502,6 @@ export default function TheaterCanvas({
           setIsPlaying(true);
         })
         .catch(() => {
-          // If browser policy blocks autoplay with audio, fall back to muted
           video.muted = true;
           setIsMuted(true);
           video.play().catch(() => {});
@@ -519,7 +535,6 @@ export default function TheaterCanvas({
     video.muted = nextMuted;
     setIsMuted(nextMuted);
 
-    // If unmuting, make sure video is playing
     if (!nextMuted && video.paused) {
       video.play().then(() => setIsPlaying(true));
     }
@@ -635,8 +650,8 @@ export default function TheaterCanvas({
 
     const movieColor = currentMovieRef.current?.accentColor || '#f59e0b';
     const screenLight = new THREE.SpotLight(movieColor, 4.2);
-    screenLight.position.set(0, 4.2, 0);
-    screenLight.target.position.set(0, 1.5, 9.5);
+    screenLight.position.set(0, 5.0, 1.0);
+    screenLight.target.position.set(0, 2.0, 8.5);
     screenLight.angle = Math.PI / 2.5;
     screenLight.penumbra = 0.8;
     screenLight.decay = 1.2;
@@ -657,9 +672,10 @@ export default function TheaterCanvas({
     ceilingLight2.position.set(8, 9, 8);
     scene.add(ceilingLight2);
 
+    // Projector Booth Light Beam shining from rear booth to screen center
     const projectorLight = new THREE.SpotLight('#ffffff', 2.0);
-    projectorLight.position.set(0, 8.5, 20.5);
-    projectorLight.target.position.set(0, 3.2, -1.0);
+    projectorLight.position.set(0, 8.5, 20.0);
+    projectorLight.target.position.set(0, 5.2, -0.6);
     projectorLight.angle = 0.28;
     projectorLight.penumbra = 0.5;
     projectorLight.decay = 1.5;
@@ -680,11 +696,6 @@ export default function TheaterCanvas({
       videoTexture.magFilter = THREE.LinearFilter;
       videoTexture.format = THREE.RGBAFormat;
       videoTexture.generateMipmaps = false;
-
-      // Adjust UV orientation for curved cylinder segment so text isn't mirrored
-      videoTexture.wrapS = THREE.RepeatWrapping;
-      videoTexture.repeat.x = -1;
-      videoTexture.offset.x = 1;
 
       videoTextureRef.current = videoTexture;
     }
@@ -885,7 +896,7 @@ export default function TheaterCanvas({
       ref={containerRef}
       className="relative w-full h-[640px] rounded-2xl overflow-hidden bg-gradient-to-b from-[#090b12] to-[#04060a] border border-white/10 select-none shadow-2xl"
     >
-      {/* Hidden HTML5 Video element used by Three.js VideoTexture */}
+      {/* Off-screen HTML5 Video element used by Three.js VideoTexture (never interferes with DOM layout) */}
       <video
         ref={videoRef}
         src={currentMovie?.trailerSrc || '/trailers/dune2.mp4'}
@@ -894,7 +905,15 @@ export default function TheaterCanvas({
         playsInline
         muted={isMuted}
         onTimeUpdate={handleTimeUpdate}
-        className="hidden"
+        style={{
+          position: 'fixed',
+          top: '-9999px',
+          left: '-9999px',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
       />
 
       {/* 3D WebGL Canvas */}
@@ -910,7 +929,7 @@ export default function TheaterCanvas({
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center">
         <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-cyan-500/30 text-cyan-300 text-xs font-semibold tracking-wider uppercase shadow-lg shadow-cyan-500/10">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span>IMAX® Laser 4K • Now Playing Trailer</span>
+          <span>IMAX® Laser 4K • Now Playing On Screen</span>
         </div>
         <div className="w-56 h-2 mt-1 border-t-2 border-cyan-400/50 rounded-t-[100%] shadow-[0_0_15px_rgba(6,182,212,0.6)]" />
       </div>
@@ -966,7 +985,7 @@ export default function TheaterCanvas({
           title="View from screen facing audience"
         >
           <Eye className="w-3.5 h-3.5" />
-          Front View
+          Audience View
         </button>
       </div>
 
@@ -981,7 +1000,7 @@ export default function TheaterCanvas({
         </button>
       </div>
 
-      {/* Dedicated In-Theater Trailer Player Bar (Above Bottom Controls) */}
+      {/* Dedicated In-Theater Trailer Player Bar */}
       <div className="absolute top-16 left-4 z-10 flex items-center gap-2 p-1.5 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/15 shadow-2xl">
         <div className="flex items-center gap-2 px-2 py-1 text-xs text-white">
           <Film className="w-4 h-4 text-amber-400" />
@@ -1010,20 +1029,20 @@ export default function TheaterCanvas({
           onClick={handleToggleMute}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
             isMuted
-              ? 'bg-white/10 text-gray-300 hover:bg-white/20'
+              ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30'
               : 'bg-cyan-500/30 border border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/20 animate-pulse'
           }`}
           title={isMuted ? 'Unmute Trailer Audio' : 'Mute Trailer Audio'}
         >
           {isMuted ? (
             <>
-              <VolumeX className="w-3.5 h-3.5 text-gray-400" />
-              <span className="hidden sm:inline">Unmute Sound</span>
+              <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">🔊 Unmute Audio</span>
             </>
           ) : (
             <>
               <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Sound Playing</span>
+              <span className="hidden sm:inline">Sound Active</span>
             </>
           )}
         </button>
@@ -1061,7 +1080,7 @@ export default function TheaterCanvas({
                 </span>
               </div>
               <p className="text-xs text-gray-400">
-                Watching {currentMovie?.title} trailer from your chosen seat
+                Watching {currentMovie?.title} trailer directly on the curved IMAX screen
               </p>
             </div>
           </div>
